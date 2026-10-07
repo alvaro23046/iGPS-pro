@@ -6,3 +6,13 @@ firmware/dumps/*
 *.key
 *_ed25519
 __pycache__/
+# Capturas crudas y derivados: SOLO LOCAL (repo público; contienen tokens, MACs, nombres de rutas)
+captures/hci/*
+!captures/hci/.gitkeep
+captures/ble/*
+!captures/ble/.gitkeep
+captures/routes/*
+!captures/routes/.gitkeep
+logs/*
+!logs/.gitkeep
+*.png

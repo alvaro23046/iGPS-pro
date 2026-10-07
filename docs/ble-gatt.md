@@ -16,7 +16,7 @@ En cada uno: `...02` = escritura teléfono→dispositivo, `...03` = notificacion
 | …dcca7e | 6e400003 (0x001B) | NOTIFY | lista de actividades (protobuf) | PROBABLE |
 | …dcca7e | 0x001A | ? (READ_REQ visto) | desconocido | UNKNOWN |
 | …dcca6e | 6e400002 (0x001F) | WRITE, WRITE_NO_RSP | cmd 0x07 / 0x0f: listado de **rutas** guardadas | PROBABLE |
-| …dcca6e | 6e400003 (0x0021) | NOTIFY | lista de rutas: nombres UTF-8 visibles ("Patiosx80", "… bogota - barbosa") | CONFIRMED nombres / PROBABLE función |
+| …dcca6e | 6e400003 (0x0021) | NOTIFY | lista de rutas: nombres UTF-8 de rutas guardadas visibles en claro | CONFIRMED nombres / PROBABLE función |
 | 0x180A Device Info | 0x2A29/0x2A27/0x2A28 | READ | fabricante/hardware/software | CONFIRMED |
 
 Descriptores CCCD (0x2902) en 0x0010, 0x0016, 0x001C, 0x0022: el teléfono escribe `0100` (activa notify) al conectar. CONFIRMED.
