@@ -88,11 +88,15 @@ public final class IgsProtocol {
 
     /** FILE_SEND troceado como la app oficial: un route_plan_data_msg completo por cada 4096 B de archivo. */
     public static List<Frame> routeFrames(int routeId, String name, byte[] cnx, long distanceCm) {
+        return routeFrames(routeId, name, cnx, distanceCm, CHUNK);
+    }
+
+    public static List<Frame> routeFrames(int routeId, String name, byte[] cnx, long distanceCm, int chunk) {
         byte[] line = (routeId + ".cnx").getBytes(StandardCharsets.UTF_8);
         byte[] inf = info(routeId, name, distanceCm);
         List<byte[]> msgs = new ArrayList<>();
-        for (int off = 0; off < cnx.length; off += CHUNK) {
-            int n = Math.min(CHUNK, cnx.length - off);
+        for (int off = 0; off < cnx.length; off += chunk) {
+            int n = Math.min(chunk, cnx.length - off);
             byte[] part = new byte[n];
             System.arraycopy(cnx, off, part, 0, n);
             ByteArrayOutputStream o = new ByteArrayOutputStream();
@@ -146,6 +150,64 @@ public final class IgsProtocol {
                 + "</TracksCount><NavsCount>" + navs.size() + "</NavsCount><PointsCount>0</PointsCount><Reduce>0</Reduce><Lang>0</Lang><Tracks>"
                 + t + "</Tracks><Navs>" + n + "</Navs><Points></Points></Route>";
         return xml.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * CNX con el formato de las rutas de la nube (EXP-003): &lt;Encode&gt;2. Primer punto absoluto "lat,lng,alt_cm";
+     * después lat/lng como deltas de SEGUNDO orden en 1e-7 grados y altitud como delta de primer orden en cm.
+     */
+    public static byte[] buildCnxEncoded(int routeId, List<double[]> track, List<Nav> navs, double distanceM,
+                                         int ascent, int descent, boolean withNavs) {
+        StringBuilder t = new StringBuilder();
+        long pla = 0, plo = 0, pdla = 0, pdlo = 0, palt = 0;
+        for (int i = 0; i < track.size(); i++) {
+            double[] p = track.get(i);
+            long la = Math.round(p[0] * 1e7), lo = Math.round(p[1] * 1e7);
+            long alt = Math.round((p.length > 2 ? p[2] : 0) * 100);
+            if (i == 0) {
+                t.append(String.format(Locale.US, "%.7f,%.7f,%d;", la / 1e7, lo / 1e7, alt));
+            } else {
+                long dla = la - pla, dlo = lo - plo;
+                t.append(dla - pdla).append(',').append(dlo - pdlo).append(',').append(alt - palt).append(';');
+                pdla = dla; pdlo = dlo;
+            }
+            pla = la; plo = lo; palt = alt;
+        }
+        StringBuilder n = new StringBuilder();
+        if (withNavs && !navs.isEmpty()) {
+            n.append("<Navs>");
+            for (Nav v : navs) {
+                n.append(String.format(Locale.US, "<Nav><Lat>%.7f</Lat><Lng>%.7f</Lng><Type>%d</Type><Info>%s</Info></Nav>",
+                        v.lat, v.lng, v.type, esc(v.info)));
+            }
+            n.append("</Navs>");
+        } else {
+            n.append("<Navs/>");
+        }
+        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Route><Id>" + routeId + "</Id><Distance>"
+                + String.format(Locale.US, "%.2f", distanceM) + "</Distance><Duration></Duration><Ascent>" + ascent
+                + "</Ascent><Descent>" + descent + "</Descent><Encode>2</Encode><Lang>0</Lang>"
+                + (withNavs && !navs.isEmpty() ? "<NavsCount>" + navs.size() + "</NavsCount>" : "")
+                + "<TracksCount>" + track.size() + "</TracksCount><Tracks>" + t + "</Tracks>" + n + "</Route>";
+        return xml.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** Decodifica Tracks Encode=2 (para pruebas). */
+    public static List<double[]> decodeTracks(String tracks) {
+        List<double[]> out = new ArrayList<>();
+        String[] parts = tracks.split(";");
+        String[] f = parts[0].split(",");
+        long la = Math.round(Double.parseDouble(f[0]) * 1e7), lo = Math.round(Double.parseDouble(f[1]) * 1e7);
+        long alt = Long.parseLong(f[2]), vla = 0, vlo = 0;
+        out.add(new double[]{la / 1e7, lo / 1e7, alt / 100.0});
+        for (int i = 1; i < parts.length; i++) {
+            if (parts[i].isEmpty()) continue;
+            String[] d = parts[i].split(",");
+            vla += Long.parseLong(d[0]); vlo += Long.parseLong(d[1]);
+            la += vla; lo += vlo; alt += Long.parseLong(d[2]);
+            out.add(new double[]{la / 1e7, lo / 1e7, alt / 100.0});
+        }
+        return out;
     }
 
     public static String hex(byte[] b) {

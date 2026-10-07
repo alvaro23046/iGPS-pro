@@ -87,12 +87,6 @@ public final class IgsLink {
             String id = c.getUuid().toString();
             if (id.startsWith("6e400003") && id.endsWith("8e")) {
                 headerNotifs.offer(v);
-                // El dispositivo nos envía datos con cabecera tipo 01: confirmar como hace la app oficial.
-                if (v.length == 20 && v[0] == 1 && IgsProtocol.headerValid(v)) {
-                    new Thread(() -> {
-                        try { write(ch("8e", 2), IgsProtocol.ack(v[1] & 0xFF, v[4] & 0xFF)); } catch (Exception ignored) {}
-                    }).start();
-                }
             }
         }
     };
@@ -165,8 +159,57 @@ public final class IgsLink {
         throw new Exception("Sin ACK del iGS (svc " + f.header[1] + " op " + f.header[4] + ")");
     }
 
-    public void sendRoute(int id, String name, byte[] cnx, long distCm, Log progress) throws Exception {
-        List<IgsProtocol.Frame> frames = IgsProtocol.routeFrames(id, name, cnx, distCm);
+    /** Envía payload+cabecera tal cual (réplica de la app oficial) y espera cualquier cabecera del mismo servicio. */
+    public byte[] sendRaw(String dataSvc, byte[] payload, byte[] hdr, long waitMs) throws Exception {
+        BluetoothGattCharacteristic data = ch(dataSvc, 2), h = ch("8e", 2);
+        int max = Math.max(20, mtu - 3);
+        headerNotifs.clear();
+        for (int off = 0; off < payload.length; off += max) {
+            int n = Math.min(max, payload.length - off);
+            byte[] part = new byte[n];
+            System.arraycopy(payload, off, part, 0, n);
+            write(data, part);
+        }
+        write(h, hdr);
+        long end = System.currentTimeMillis() + waitMs;
+        while (System.currentTimeMillis() < end) {
+            byte[] r = headerNotifs.poll(Math.max(1, end - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
+            if (r == null) break;
+            if (r.length == 20 && r[1] == hdr[1]) return r;
+        }
+        return null;
+    }
+
+    /** Secuencia de inicio observada en EXP-001/EXP-003 antes de cualquier operación de rutas. */
+    static final String[][] HANDSHAKE = {
+            {"9e", "080d1001", "010dffff01ffff0004be01ffffffffffffffffec"},
+            {"9e", "08111002", "0111ffff02ffff0004ad01ffffffffffffffffae"},
+            {"7e", "08061008", "0106ffff08ffff0004e301ffffffffffffffff0b"},
+            {"6e", "08071007", "0107ffff07ffff00040901ffffffffffffffffe6"},
+            {"6e", "080f1002181322021800", "010fffff02ffff000a6801ffffffffffffffff22"},
+            {"6e", "08071001620418002001", "0107ffff01ffff000a1101ffffffffffffffff95"},
+            {"7e", "0813100218103800", "0113ffff02ffff00087b01ffffffffffffffff4a"},
+    };
+
+    static byte[] unhex(String x) {
+        byte[] b = new byte[x.length() / 2];
+        for (int i = 0; i < b.length; i++) b[i] = (byte) Integer.parseInt(x.substring(2 * i, 2 * i + 2), 16);
+        return b;
+    }
+
+    private boolean handshakeDone;
+
+    public void handshake() throws Exception {
+        if (handshakeDone) return;
+        for (String[] s : HANDSHAKE) {
+            byte[] r = sendRaw(s[0], unhex(s[1]), unhex(s[2]), 3000);
+            log.log("init " + s[2].substring(0, 10) + " -> " + (r == null ? "sin respuesta" : IgsProtocol.hex(r).substring(0, 22)));
+        }
+        handshakeDone = true;
+    }
+
+    public void sendRoute(int id, String name, byte[] cnx, long distCm, int chunk, Log progress) throws Exception {
+        List<IgsProtocol.Frame> frames = IgsProtocol.routeFrames(id, name, cnx, distCm, chunk);
         for (int i = 0; i < frames.size(); i++) {
             byte[] ack = send("6e", frames.get(i), 15000);
             if (ack[0] == 2 && ack[7] != 0) throw new Exception("El iGS rechazó el trozo " + (i + 1) + " (estado " + ack[7] + ")");
@@ -176,6 +219,7 @@ public final class IgsLink {
 
     public void close() {
         connected = false;
+        handshakeDone = false;
         if (gatt != null) { gatt.disconnect(); gatt.close(); gatt = null; }
     }
 }

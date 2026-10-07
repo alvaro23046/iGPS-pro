@@ -30,6 +30,14 @@ public class IgsProtocolTest {
         assertEquals("0207ffff04ffff00ffffffffffffffffffffff4c", IgsProtocol.hex(IgsProtocol.ack(7, 4)));
     }
 
+    @Test public void encodedTracksRoundTrip() {
+        // fragmento real de EXP-003 (inicio de la ruta), decodificado y re-codificado
+        String real = "4.6888695,-74.0971850,283100;-502,546,20;-1834,2428,-20;143,24,20;-97,170,-40;";
+        List<double[]> pts = IgsProtocol.decodeTracks(real);
+        String xml = new String(IgsProtocol.buildCnxEncoded(1, pts, new ArrayList<>(), 1, 0, 0, false), StandardCharsets.UTF_8);
+        assertTrue(xml, xml.contains("<Tracks>" + real + "</Tracks>"));
+    }
+
     @Test public void routeChunkingFlags() {
         List<double[]> tr = new ArrayList<>();
         for (int i = 0; i < 400; i++) tr.add(new double[]{-25.28 - i * 1e-4, -57.63, 0});
