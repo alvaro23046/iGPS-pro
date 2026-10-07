@@ -1,27 +1,21 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Vincula y conecta adb inalámbrico al PROPIO teléfono desde Termux.
-# Encuentra los puertos solo (mDNS); tú solo escribes el código de 6 dígitos.
-# Uso: abre "Vincular con código de vinculación", deja la ventana abierta, ejecuta:
-#   bash tools/android/adb_wifi_pair.sh
-export ADB_MDNS_OPENSCREEN=1
-adb start-server >/dev/null 2>&1
-find_port() { adb mdns services 2>/dev/null | grep "$1" | grep -oE '[0-9.]+:[0-9]+' | head -1; }
-
-echo "Buscando puerto de vinculación (ventana del código abierta)..."
-for i in $(seq 1 15); do P=$(find_port _adb-tls-pairing); [ -n "$P" ] && break; sleep 1; done
-if [ -z "$P" ]; then
-  read -rp "No detectado. Escribe el puerto que sale bajo el código (ej 38831): " PORT
-  P="127.0.0.1:$PORT"
-fi
-echo "Vinculación en $P"
-read -rp "Código de 6 dígitos: " CODE
-adb pair "$P" "$CODE" || { echo "Falló la vinculación. Abre un código nuevo y repite."; exit 1; }
-
-echo "Buscando puerto de conexión..."
-for i in $(seq 1 15); do C=$(find_port _adb-tls-connect); [ -n "$C" ] && break; sleep 1; done
-if [ -z "$C" ]; then
-  read -rp "Escribe el puerto de 'Dirección IP y puerto' (arriba, ej 37109): " PORT
-  C="127.0.0.1:$PORT"
-fi
-adb connect "$C"
-adb devices -l
+# Uso (con la ventana "código de vinculación" abierta en pantalla dividida):
+#   bash tools/android/adb_wifi_pair.sh PUERTO_VINCULACION CODIGO [PUERTO_CONEXION]
+# Acepta "38831" o "192.168.100.6:38831".
+set -u
+norm() { case "$1" in *:*) echo "${1##*:}";; *) echo "$1";; esac; }
+PP=$(norm "${1:?falta PUERTO_VINCULACION (el que sale bajo el código)}")
+CODE="${2:?falta CODIGO de 6 dígitos}"
+CP=$(norm "${3:-}")
+IP=$(ifconfig 2>/dev/null | grep -oE 'inet 192\.168\.[0-9]+\.[0-9]+' | head -1 | cut -d' ' -f2)
+adb kill-server >/dev/null 2>&1; adb start-server >/dev/null 2>&1
+OK=""
+for H in 127.0.0.1 ${IP:-}; do
+  echo "== adb pair $H:$PP"
+  if adb pair "$H:$PP" "$CODE" 2>&1 | tee /dev/stderr | grep -q "Successfully paired"; then OK=$H; break; fi
+done
+[ -n "$OK" ] || { echo "FALLÓ. Causas típicas: la ventana del código se cerró, puerto viejo, código caducado."; exit 1; }
+[ -n "$CP" ] || read -rp "Puerto de 'Dirección IP y puerto' (arriba, solo número): " CP
+CP=$(norm "$CP")
+adb connect "$OK:$CP"; adb devices -l
