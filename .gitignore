@@ -16,3 +16,10 @@ captures/routes/*
 logs/*
 !logs/.gitkeep
 *.png
+firmware/analysis/apk/
+mobile/android/igs-bridge/.gradle/
+mobile/android/igs-bridge/app/build/
+mobile/android/igs-bridge/build/
+mobile/android/igs-bridge/local.properties
+!mobile/android/igs-bridge/branding/*.png
+!mobile/android/igs-bridge/app/src/main/res/**/*.png

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="igs520-lab" xmlns="http://www.topografix.com/GPX/1/1">
+ <metadata><name>IGSLAB_T1</name></metadata>
+ <trk><name>IGSLAB_T1</name><trkseg>
+  <trkpt lat="-25.28220" lon="-57.63510"/>
+  <trkpt lat="-25.28400" lon="-57.63300"/>
+  <trkpt lat="-25.28650" lon="-57.63050"/>
+  <trkpt lat="-25.28900" lon="-57.62800"/>
+  <trkpt lat="-25.29100" lon="-57.62600"/>
+ </trkseg></trk>
+</gpx>
